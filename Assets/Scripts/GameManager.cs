@@ -14,7 +14,6 @@ public class GameManager : MonoBehaviour
 
     [Header("Referências")]
     [SerializeField] private UIManager uiManager;
-    [SerializeField] private OrderValidator orderValidator;
 
     [Header("Progressão")]
     [Tooltip("A cada N pedidos concluídos, libera pedidos de maior dificuldade.")]
@@ -49,9 +48,9 @@ public class GameManager : MonoBehaviour
         uiManager.ShowOrder(CurrentOrder);
     }
 
-    // Chamado pelo PlayerInteraction quando o jogador finaliza a preparação
-    // e entrega a bebida (deliveredDescription descreve o que foi montado).
-    public void SubmitOrder(string deliveredDescription)
+    // Chamado pelo PlayerInteraction/DrinkBuilder quando o jogador finaliza a
+    // preparação e entrega a bebida montada.
+    public void SubmitOrder(PreparedDrink deliveredDrink)
     {
         if (CurrentState != GameState.PreparingOrder)
         {
@@ -61,7 +60,8 @@ public class GameManager : MonoBehaviour
         CurrentState = GameState.ValidatingOrder;
         uiManager.ShowValidating();
 
-        orderValidator.Validate(CurrentOrder.Name, deliveredDescription, OnValidationComplete);
+        ValidationResult result = OrderValidator.Validate(CurrentOrder, deliveredDrink);
+        OnValidationComplete(result);
     }
 
     private void OnValidationComplete(ValidationResult result)

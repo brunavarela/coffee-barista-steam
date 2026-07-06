@@ -1,16 +1,31 @@
 using UnityEngine;
 
-// Qualquer objeto que o jogador possa apontar/segurar (xícara, jarra de leite,
-// colher etc.) implementa essa interface.
-public interface IInteractable
+// Base comum pra qualquer objeto que reage ao olhar do jogador (highlight
+// visual e nome mostrado na tela).
+public interface IHighlightable
 {
+    string DisplayName { get; }
     void OnHoverEnter();
     void OnHoverExit();
-    void OnGrab(Transform handAnchor);
-    void OnRelease();
 }
 
-// Raycast a partir da câmera POV pra detectar e segurar/soltar objetos.
+// Objetos que o jogador pega e carrega na mão (xícara, jarra de leite).
+public interface IInteractable : IHighlightable
+{
+    void OnGrab(Transform handAnchor);
+    void OnRelease(IHighlightable releaseTarget);
+}
+
+// Objetos fixos que o jogador aciona sem segurar (máquina de espresso, bomba
+// de xarope, balde de gelo).
+public interface IUsable : IHighlightable
+{
+    void Use();
+}
+
+// Raycast a partir da câmera POV pra detectar, segurar/soltar ou acionar
+// objetos. Clicar em espaço vazio (nada no centro da tela) tenta entregar o
+// pedido ou avançar pro próximo, dependendo do estado do jogo.
 public class PlayerInteraction : MonoBehaviour
 {
     [Header("Referências")]
@@ -22,7 +37,7 @@ public class PlayerInteraction : MonoBehaviour
     [SerializeField] private float interactionRange = 2f;
     [SerializeField] private LayerMask interactableLayer;
 
-    private IInteractable currentHoverTarget;
+    private IHighlightable currentHoverTarget;
     private IInteractable grabbedObject;
 
     private void Update()
@@ -35,21 +50,18 @@ public class PlayerInteraction : MonoBehaviour
     {
         Ray ray = povCamera.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0f));
 
+        IHighlightable target = null;
         if (Physics.Raycast(ray, out RaycastHit hit, interactionRange, interactableLayer))
         {
-            IInteractable target = hit.collider.GetComponent<IInteractable>();
-
-            if (target != currentHoverTarget)
-            {
-                currentHoverTarget?.OnHoverExit();
-                currentHoverTarget = target;
-                currentHoverTarget?.OnHoverEnter();
-            }
+            target = hit.collider.GetComponent<IHighlightable>();
         }
-        else if (currentHoverTarget != null)
+
+        if (target != currentHoverTarget)
         {
-            currentHoverTarget.OnHoverExit();
-            currentHoverTarget = null;
+            currentHoverTarget?.OnHoverExit();
+            currentHoverTarget = target;
+            currentHoverTarget?.OnHoverEnter();
+            UIManager.Instance?.ShowHoverName(currentHoverTarget?.DisplayName);
         }
     }
 
@@ -60,17 +72,41 @@ public class PlayerInteraction : MonoBehaviour
             return;
         }
 
-        if (grabbedObject == null && currentHoverTarget != null)
+        // Segurando algo e mirando num equipamento fixo (máquina, leite,
+        // xarope, gelo): aciona sem soltar o que está na mão.
+        if (grabbedObject != null && currentHoverTarget is IUsable usableWhileHolding)
         {
-            grabbedObject = currentHoverTarget;
+            usableWhileHolding.Use();
+            return;
+        }
+
+        if (grabbedObject != null)
+        {
+            grabbedObject.OnRelease(currentHoverTarget);
+            grabbedObject = null;
+            handAnimationController?.PlayIdle();
+            return;
+        }
+
+        if (currentHoverTarget is IInteractable interactable)
+        {
+            grabbedObject = interactable;
             grabbedObject.OnGrab(handAnchor);
             handAnimationController?.PlayGrab();
         }
-        else if (grabbedObject != null)
+        else if (currentHoverTarget is IUsable usable)
         {
-            grabbedObject.OnRelease();
-            grabbedObject = null;
-            handAnimationController?.PlayIdle();
+            usable.Use();
+        }
+        else if (currentHoverTarget == null)
+        {
+            if (DrinkBuilder.Instance == null)
+            {
+                Debug.LogError("[PlayerInteraction] DrinkBuilder.Instance esta null. Confira se o GameObject 'DrinkBuilder' existe na cena (rode Tools > Coffee Barista > Montar Cena de Teste fora do Play).");
+                return;
+            }
+
+            DrinkBuilder.Instance.TryAdvanceAfterFeedback();
         }
     }
 }
