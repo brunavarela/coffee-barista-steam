@@ -1,0 +1,24 @@
+# Unity
+Library/
+Logs/
+obj/
+Temp/
+Build/
+Builds/
+*.csproj
+*.sln
+*.unityproj
+*.sln.DotSettings
+.vs/
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Env
+.env
+.env.local
+Assets/StreamingAssets/anthropic_api_key.txt
